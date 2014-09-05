@@ -1,0 +1,235 @@
+unit uPrincipal;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, Buttons, ComCtrls, StdCtrls, Menus, StrUtils;
+
+type
+  TForm_Principal = class(TForm)
+    RichEdit_SQL: TRichEdit;
+    Label_SQL: TLabel;
+    RichEdit_Variaveis: TRichEdit;
+    Label_Variaveis: TLabel;
+    RichEdit_Resultado: TRichEdit;
+    Label_Resultado: TLabel;
+    SpeedButton_Substituir: TSpeedButton;
+    SpeedButton_Copiar: TSpeedButton;
+    PopupMenu_OpcoesRichText: TPopupMenu;
+    Abrir1: TMenuItem;
+    N1: TMenuItem;
+    Recortar1: TMenuItem;
+    Copiar1: TMenuItem;
+    Colar1: TMenuItem;
+    N2: TMenuItem;
+    Carrregararquivo1: TMenuItem;
+    procedure FormKeyPress(Sender: TObject; var Key: Char);
+    procedure SpeedButton_SubstituirClick(Sender: TObject);
+    procedure SpeedButton_CopiarClick(Sender: TObject);
+    procedure RichEdit_ResultadoKeyUp(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure PopupMenu_OpcoesRichTextPopup(Sender: TObject);
+    procedure RichEdit_ResultadoKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure Abrir1Click(Sender: TObject);
+  private
+    { Private declarations }
+    procedure validaPreenchimentoCampos(pRichEdit: TRichEdit; pNomeCampo: String);
+    procedure defineVariaveis(pRichEdit: TRichEdit);
+    procedure buscaVariaveis(var pRichEditVariaveis: TRichEdit; var pRichEditSQL: TRichEdit);
+  public
+    { Public declarations }
+  end;
+
+var
+  Form_Principal: TForm_Principal;
+  arrayVariaveis: array of string;
+
+implementation
+
+uses TypInfo, uVisualizador;
+
+{$R *.dfm}
+
+procedure TForm_Principal.buscaVariaveis(var pRichEditVariaveis: TRichEdit; var pRichEditSQL: TRichEdit);
+var
+  contador: Integer;
+  varNaoEncontradas: Array of String;
+
+  retornoPos: Integer;
+
+  function retornaVarNaoEncontradas(index: Integer): string;
+  begin
+
+    if index <= Length(arrayVariaveis)-1 then
+    begin
+      if (index > 0) then
+        Result:= Result + ', ';
+
+      Result:= Result + varNaoEncontradas[index] + retornaVarNaoEncontradas(index+1);
+    end;
+
+    Result:= Result;
+
+  end;
+
+begin
+  varNaoEncontradas:= nil;
+  contador:= 0;
+  //varNaoEncontradas.
+
+  defineVariaveis(pRichEditVariaveis);
+
+  for contador:= 0 to (Length(arrayVariaveis)-1) do
+  begin
+    if (Pos(arrayVariaveis[contador], RichEdit_SQL.Text, 1) > 0) then
+    begin
+      SetLength(varNaoEncontradas, Length(varNaoEncontradas)+1);
+      varNaoEncontradas[Length(varNaoEncontradas)-1] := arrayVariaveis[contador];
+    end;
+  end;
+
+  if Length(varNaoEncontradas) > 0 then
+  begin
+    if
+      (Application.MessageBox(
+        PWideChar
+        (
+        'Não há ao menos uma ocorrência' +
+          IfThen
+          (
+            (Length(varNaoEncontradas) = 1),
+            ' da variável ',
+            ' das variáveis '
+          ) +
+          'abaixo no campo de SQL:' +
+          #13 + #13 +
+          retornaVarNaoEncontradas(0) +
+          #13 + #13 +
+          'Deseja continuar mesmo assim?'
+        ),
+
+        'Confirmação.',
+
+        MB_YESNO + MB_ICONQUESTION) = mrNo)
+
+        //CORRIGIR PROBLEMA NA IDENTIFICAÇÃO DE VARIÁVEIS SEM OCORRÊNCIA
+    then
+    begin
+      Abort;
+    end;
+
+  end;
+
+end;
+
+procedure TForm_Principal.defineVariaveis(pRichEdit: TRichEdit);
+var
+  contador: Integer;
+  textoTemporario: String;
+begin
+  arrayVariaveis:= nil;
+  contador:= 1;
+  textoTemporario:= pRichEdit.Text;
+
+  while not (contador >= (Length(pRichEdit.Text))) do
+  begin
+    if (textoTemporario[contador] in [':', '&']) then
+    begin
+      SetLength(arrayVariaveis, Length(arrayVariaveis)+1);
+      while not (textoTemporario[contador] in [' ', #13, #0]) do
+      begin
+        arrayVariaveis[Length(arrayVariaveis)-1]:= arrayVariaveis[Length(arrayVariaveis)-1] + textoTemporario[contador];
+        Inc(contador);
+      end;
+    end;
+    Inc(contador);
+  end;
+
+  if (Length(arrayVariaveis) = 0) then
+  begin
+    Application.MessageBox('Não há variáveis declaradas na seção de variáveis!', 'Erro!', MB_OK + MB_ICONERROR);
+    Abort;
+  end;
+
+end;
+
+procedure TForm_Principal.validaPreenchimentoCampos(pRichEdit: TRichEdit; pNomeCampo: String);
+begin
+  if (pRichEdit.Text = EmptyStr) then
+  begin
+    ShowMessage('Preecha o campo' + ' ' + pNomeCampo + '.');
+    pRichEdit.SetFocus;
+    Abort;
+  end;
+end;
+
+procedure TForm_Principal.FormKeyPress(Sender: TObject; var Key: Char);
+begin
+
+  case Key of
+    #27:  Close; //Esc
+  end;
+
+end;
+
+procedure TForm_Principal.SpeedButton_SubstituirClick(Sender: TObject);
+begin
+
+  //Passo 1: Verificar se os campos nevessários estão preenchidos
+  validaPreenchimentoCampos(RichEdit_Variaveis, Label_Variaveis.Caption);
+  validaPreenchimentoCampos(RichEdit_SQL, Label_SQL.Caption);
+
+  //Passo 2: Identifica/define as variáveis em memória e busca no RichEdit de SQL por pelo menos uma ocorrência de cada variável
+  buscaVariaveis(RichEdit_Variaveis, RichEdit_SQL);
+
+  //varificaVariaveis(RichEdit_SQL, Label_SQL.Caption);
+
+  //PASSO 3: VERIFICAR SE TODAS AS VARIÁVEIS DOS DOIS CAMPOS SÃO CAMPATÍVEIS (NOME IGUAIS, QUANTIDADE IGUAL)
+  //PASSO 4: DEFINIR AS VARIÁVEIS COMO PALAVRAS-CHAVE A SEREM BUSCADAS
+  //PASSO 5: SUBSTITUIR O TEXTO EM UMA VARIÁVEL SEPARADA E JOGAR O RESULTADO NO 3º RICHEDIT
+end;
+
+procedure TForm_Principal.SpeedButton_CopiarClick(Sender: TObject);
+begin
+  ;
+end;
+
+procedure TForm_Principal.RichEdit_ResultadoKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+var
+  textoTemporario: TStrings;
+begin
+  SpeedButton_Copiar.Enabled:= RichEdit_Resultado.Text <> EmptyStr;
+end;
+
+procedure TForm_Principal.PopupMenu_OpcoesRichTextPopup(Sender: TObject);
+begin
+
+  PopupMenu_OpcoesRichText.Items.Find('Carrregar arquivo').Enabled:= ActiveControl <> RichEdit_Resultado;
+  PopupMenu_OpcoesRichText.Items.Find('Colar').Enabled:= ActiveControl <> RichEdit_Resultado;
+  
+end;
+
+procedure TForm_Principal.RichEdit_ResultadoKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+
+  if ((ssCtrl in Shift) and ((Key = 86) or (Key = 118))) then
+    Abort;
+
+end;
+
+procedure TForm_Principal.Abrir1Click(Sender: TObject);
+begin
+  Form_Visualizador:= nil;
+  Form_Visualizador:= TForm_Visualizador.Create(Self);
+  Form_Visualizador.RichEdit_Texto.Text:= (ActiveControl as TRichEdit).Text;
+  Form_Visualizador.ShowModal;
+
+  if Form_Visualizador.ModalResult = mrOk then
+    (ActiveControl as TRichEdit).Text:= Form_Visualizador.RichEdit_Texto.Text;
+end;
+
+end.
